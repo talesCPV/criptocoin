@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebScrap</title>
+    <style>
+
+        * {
+            margin: 5px;
+        }
+
+        button{
+            padding: 5px;
+            margin: 10px;
+        }
+
+        button:hover{
+            cursor: pointer;
+        }
+
+        input{
+            height: 20px;
+        }
+
+        #top{
+            display: grid;
+            grid-template:
+            "start  tempo    ciclo"
+            "invest btnStart btnQuery" 
+            "tab    tab      tab"
+            "trades trades   trades"
+            
+            ;
+            width: 100%;
+            height: auto;
+            padding: 10px;
+            background-color: rgb(136, 189, 219);            
+        }
+
+        #lblLucro{
+            font-size: xx-large;
+            font-weight: 500;
+        }
+
+        .myTable{
+            font-family: Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .myTable th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #0d6b49;
+            color: white;
+        }
+
+        .myTable tr:nth-child(even){background-color: #f2f2f2;}
+
+        .myTable tr:hover {
+            background-color: #ddd;
+            cursor: pointer;
+        }
+
+        .myTable tr{
+            border-bottom: solid 1px rgb(14, 12, 12);
+            background-color: rgb(195, 201, 199);
+            margin: 5px;
+        }
+
+        .myTable td, .myTable th{
+            border: 1px solid #ddd;
+            padding: 8px;            
+        }
+
+    </style>
+</head>
+<body>
+    
+    <div id="top">        
+        <p id="lblStart" style="grid-area: start;">Início: 00:00:00</p>
+        <p id="lblTempo" style="grid-area: tempo;">Tempo Decorrido: 00:00:00</p>
+
+        <div style="display: flex; grid-area: ciclo; width: 100%;">
+            <p id="lblCiclos">Ciclo: 0 </p>
+            <progress style="margin-left: 10px;" id="pbrCiclo" value="20" max="20"></progress>
+            <p id="lblContagem"></p>
+        </div>
+
+        <div style="display: flex; grid-area: invest;">
+            <p id="lblInvest">Investimento:</p> <input type="text" value="0" id="edtInvest">
+        </div>
+                
+        <button id="btnStart" style="grid-area: btnStart;">Start</button>
+        <button id="btnGet" style="grid-area: btnQuery;">Force Query</button>
+        <div id="trades" style="display: flex; grid-area: trades;">
+            <p>Trades</p>
+            <select id="cmbTrades" style="width: 100%;"></select>
+        </div>
+
+        <table id="tblAtual" class="myTable" style="grid-area: tab;"></table>
+
+
+    </div>
+
+    <div id="main"></div>
+
+</body>
+<script>
+    setInterval(clock, 1000);
+    setTimeout(query, 1000);
+
+    class Coin{
+        constructor(index, nome, val, indice, perc, sig){
+            this.index = index;
+            this.nome = nome;
+            this.val = val;
+            this.indice = indice;
+            this.perc = perc;
+            this.sig = sig
+            this.acum = 0;
+            this.invest = 0;
+            this.tend = '';
+            this.tend_ciclo = 0;
+            this.tend_gap = 0;
+            this.weigth = 1;
+        }
+    }
+
+    Coin.prototype.refresh = function(val, indice, perc){
+        let acum = this.perc - perc
+
+        if( (acum > 0 && this.tend == '+') || (acum < 0 && this.tend == '-' ) ){
+            this.tend_ciclo++
+            this.tend_gap += acum
+        }else if((acum > 0 && this.tend == '-') || (acum < 0 && this.tend == '+' )){
+            this.tend_ciclo = 1
+            this.tend_gap = 0
+        }
+
+        if(acum > 0){
+            this.tend = '+'; 
+        } else if(acum < 0){
+            this.tend = '-';
+        }
+                       
+        if(this.tend_ciclo == '' && acum != 0){
+            this.tend_ciclo = 1
+        }
+
+        this.acum += acum;
+        this.val = val;
+        this.indice = indice;
+        this.perc = perc;
+
+        this.sort();
+
+    }
+
+    Coin.prototype.sort = function(){
+        this.weigth = 1;
+        if(this.tend == '+'){
+            this.weigth *= (1 + (this.tend_ciclo/1));
+        }
+        if(this.tend == '-'){
+            this.weigth /= (1+ (this.tend_ciclo/1));
+        }                
+        //this.weigth *= this.acum;
+
+        this.weigth += (this.tend_gap * 10)
+
+        this.weigth = this.weigth.toFixed(5)
+    }
+
+    const data = new Object;
+        data.start = false;
+        data.ciclo = 0;
+        data.inicio;
+        data.tempo;
+        data.montante = 0;
+        data.pago = 0;
+        data.index = -1;
+        data.timer = [0,0,0];
+        data.trades = [];
+        
+    const main = document.getElementById('main');
+    const btnGet = document.getElementById('btnGet');
+    const btnStart = document.getElementById('btnStart');
+    const edtInvest = document.getElementById('edtInvest');
+    const pbrCiclo = document.getElementById('pbrCiclo');
+    const lblCiclo = document.getElementById('lblCiclos');
+    const lblStart = document.getElementById('lblStart');
+    const lblTempo = document.getElementById('lblTempo');
+    const tblAtual = document.getElementById('tblAtual');
+    const tblContagem = document.getElementById('tblContagem');
+    const cmbTrades = document.getElementById('cmbTrades');
+    const coins = [];
+    
+    btnStart.addEventListener('click',()=>{
+        edtInvest.disabled = true;
+        data.montante = parseFloat(edtInvest.value);
+        data.start = true;
+        data.ciclo = 0;
+        for(let i=0; i<coins.length; i++){
+            coins.acum = 10;
+        }
+
+        const today = new Date();
+        const time = today.getHours().toString().padStart(2, '0') + ":" + today.getMinutes().toString().padStart(2, '0') + ":" + today.getSeconds().toString().padStart(2, '0');
+
+        query();
+        lblStart.innerText = "Início: "+ time
+
+    })
+
+
+    btnGet.addEventListener('click',()=>{
+        query()
+    })
+
+    function getFloat(N){
+        N = N.toString()
+        const allow = ['0','1','2','3','4','5','6','7','8','9','.','-']
+        let out = ''
+
+        for(let i=0; i<N.length; i++){
+            if(allow.includes(N[i])){
+                out += N[i]
+            }
+        }
+        return parseFloat(out)
+    }
+
+    function addLine(vals,mark){
+        const row = document.createElement('tr')
+        for(let i=0; i<vals.length; i++){
+            const td = document.createElement('td')
+            td.innerHTML=vals[i]
+            if(vals[i][0] == "-"){
+                td.style = "background:rgb(231, 128, 114);"
+            }else if(vals[i][0] == "+"){
+                td.style = "background:rgb(114, 231, 129);"
+            }
+            row.appendChild(td)
+            if(mark){
+                row.style.backgroundColor = "rgb(100,100,100)"
+                row.style.color = "rgb(255,255,255)"                
+            }
+        }                   
+        return row
+    }
+
+
+    function trade(){
+        console.clear()
+
+        // SORT
+        const newCoin = coins.slice()
+        newCoin.sort((a, b)=> {                                 
+            return getFloat(a.weigth.toString()) > getFloat(b.weigth.toString()) ? -1 : getFloat(a.weigth.toString()) < getFloat(b.weigth.toString()) ? 1 : 0;
+        })
+
+
+        const today = new Date();
+        const time = today.getHours().toString().padStart(2, '0') + ":" + today.getMinutes().toString().padStart(2, '0') + ":" + today.getSeconds().toString().padStart(2, '0');
+
+        if(data.index >= 0){
+            let usd =  coins[data.index].invest * getFloat(coins[data.index].val)
+            if(data.index != newCoin[0].index){                
+                data.pago = newCoin[0].val
+                cripto =  usd / getFloat(newCoin[0].val)
+                coins[newCoin[0].index].invest = cripto;
+
+                let newTrade = `${time} | Venda: ${coins[data.index].nome} ${coins[data.index].invest} a U$${coins[data.index].val}`
+                newTrade += ` - > Saldo: U$${usd.toFixed(2)}`
+                newTrade += ` | Compra: ${newCoin[0].nome} ${newCoin[0].invest} a U$${newCoin[0].val}`
+
+                coins[data.index].invest = 0
+
+                const opt = document.createElement('option')
+                opt.innerText = newTrade
+                opt.value = time
+                cmbTrades.appendChild(opt)
+                cmbTrades.value = time
+            }
+            const gain_perc = 0
+            const margem = 0
+            tblAtual.innerHTML = "<tr><th>Melhor</th><th>Compra</th><th>Atual</th><th>%</th><th>Montante</th><th>Saldo</th><th>Margem</th></tr>"
+            tblAtual.appendChild(addLine([newCoin[0].nome,data.pago,newCoin[0].val,gain_perc,newCoin[0].invest,"U$"+usd.toFixed(2),margem ],false))
+
+        }else{
+            
+            coins[newCoin[0].index].invest = data.montante / getFloat(newCoin[0].val) ;
+            const opt = document.createElement('option')
+            opt.innerText = `${time} | Saldo: U$${data.montante.toFixed(2)} | Compra: ${data.montante} ->  ${newCoin[0].nome} ${newCoin[0].invest} a ${newCoin[0].val}`
+            cmbTrades.appendChild(opt)
+
+        }
+        
+        data.index = newCoin[0].index
+
+        console.log(newCoin[0].index+")"+ newCoin[0].nome+" -> " + newCoin[0].tend_gap + " : " + newCoin[0].weigth)
+
+    }
+
+    function query(){
+        const params = new URLSearchParams();        
+        params.append("url", "https://www.google.com/finance/markets/cryptocurrencies");
+
+        const myRequest = new Request("scrap.php",{
+            method : "POST",
+            body : params
+        });           
+
+        const myPromise = fetch(myRequest)
+
+        myPromise.then((response)=>{
+
+            response.text().then((text)=>{
+
+                const body = document.createElement('div');
+                body.innerHTML = text;       
+
+                const criptos = body.querySelectorAll('.SxcTic');             
+                if(criptos.length >0){
+                    if(data.start){
+                        trade();
+                    }
+                    main.innerHTML = '';
+                    const table = document.createElement('table');
+                    table.className = "myTable";
+                    table.innerHTML="<tr><th></th><th>Criptomoeda</th><th>USD</th><th>+/-</th><th>%</th><th>Acum.</th><th>↑↓</th><th>Gap</th><th>Peso</th><th>Inv.</th></tr>"
+
+                    const first = coins.length
+
+                    for(let i=0; i<criptos.length; i++){                        
+                        const name = criptos[i].querySelector('.ZvmM7').innerText;
+                        const val = criptos[i].querySelector('.YMlKec').innerText;
+                        const indice = criptos[i].querySelector('.P2Luy').innerText.substring(1,criptos[i].querySelector('.P2Luy').innerText.length);
+                        const perc = criptos[i].querySelector('.JwB6zf').innerText.substring(0,criptos[i].querySelector('.JwB6zf').innerText.length-1);
+                        const sig = criptos[i].querySelector('.P2Luy').innerText[0];
+                        let acum = 0;
+
+                        if(!first){
+                            coins.push(new Coin(i, name,val,indice,perc, sig))
+                        }else{                            
+                            coins[i].refresh(val, indice, perc)                            
+                        }
+
+                        let mark = false
+                        if(data.index == i){
+                            mark = true
+                        }
+
+                        table.appendChild(addLine([i,name,val,sig+"U$"+indice,sig+perc+"%",coins[i].acum.toFixed(2)+"%",coins[i].tend + coins[i].tend_ciclo, coins[i].tend_gap.toFixed(3)+"%" , coins[i].weigth, coins[i].invest.toFixed(6) ],mark));
+                    }
+
+                    main.appendChild(table)
+                    
+                    addCiclo()
+                    
+                }else{
+                    query()
+                }
+
+            })
+
+        })        
+    }
+
+    function clock(){
+        if(data.start){
+            data.timer[2]++
+            if(data.timer[2] >= 60){
+                data.timer[2] = 0
+                data.timer[1]++
+                if(data.timer[1] >= 60){
+                    data.timer[1] = 0
+                    data.timer[0]++
+                }
+            }
+
+            pbrCiclo.value --;
+            if(pbrCiclo.value <= 0){
+                pbrCiclo.value = 20;
+                query()
+            }
+
+            const time = data.timer[0].toString().padStart(2, '0') + ":" + data.timer[1].toString().padStart(2, '0') + ":" + data.timer[2].toString().padStart(2, '0');
+            lblTempo.innerText = "Tempo Decorrido: "+ time
+            lblContagem.innerText = pbrCiclo.value
+        }
+
+    }
+
+
+    function addCiclo(){
+        data.ciclo ++
+        lblCiclo.innerText = "Ciclo:"+data.ciclo;
+
+    }
+
+</script>
+</html>
