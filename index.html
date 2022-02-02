@@ -156,11 +156,11 @@
         this.indice = indice;
         this.perc = perc;
 
-        this.sort();
+        this.peso();
 
     }
 
-    Coin.prototype.sort = function(){
+    Coin.prototype.peso = function(){
         this.weigth = 1;
         if(this.tend == '+'){
             this.weigth *= (1 + (this.tend_ciclo/1));
@@ -168,17 +168,14 @@
         if(this.tend == '-'){
             this.weigth /= (1+ (this.tend_ciclo/1));
         }                
-        //this.weigth *= this.acum;
-
         this.weigth += (this.tend_gap * 10)
-
         this.weigth = this.weigth.toFixed(5)
     }
 
     const data = new Object;
         data.start = false;
         data.ciclo = 0;
-        data.inicio;
+        data.mont_inicial = 0;
         data.tempo;
         data.montante = 0;
         data.pago = 0;
@@ -201,7 +198,8 @@
     
     btnStart.addEventListener('click',()=>{
         edtInvest.disabled = true;
-        data.montante = parseFloat(edtInvest.value);
+        data.mont_inicial = parseFloat(edtInvest.value);
+        data.montante = data.mont_inicial;
         data.start = true;
         data.ciclo = 0;
         for(let i=0; i<coins.length; i++){
@@ -215,7 +213,6 @@
         lblStart.innerText = "Início: "+ time
 
     })
-
 
     btnGet.addEventListener('click',()=>{
         query()
@@ -269,6 +266,7 @@
 
         if(data.index >= 0){
             let usd =  coins[data.index].invest * getFloat(coins[data.index].val)
+            data.montante = usd
             if(data.index != newCoin[0].index){                
                 data.pago = newCoin[0].val
                 cripto =  usd / getFloat(newCoin[0].val)
@@ -286,10 +284,14 @@
                 cmbTrades.appendChild(opt)
                 cmbTrades.value = time
             }
-            const gain_perc = 0
-            const margem = 0
+            const gain_perc = (data.pago - newCoin[0].val) / (data.pago/100)
+            const margem =  ( data.montante - data.mont_inicial) /  (data.montante/100)
+            let sig = ''
+            if(margem > 0){
+                sig = "+"
+            }
             tblAtual.innerHTML = "<tr><th>Melhor</th><th>Compra</th><th>Atual</th><th>%</th><th>Montante</th><th>Saldo</th><th>Margem</th></tr>"
-            tblAtual.appendChild(addLine([newCoin[0].nome,data.pago,newCoin[0].val,gain_perc,newCoin[0].invest,"U$"+usd.toFixed(2),margem ],false))
+            tblAtual.appendChild(addLine([newCoin[0].nome,data.pago,newCoin[0].val,gain_perc.toFixed(3)+"%",newCoin[0].invest,"U$"+usd.toFixed(2),sig+margem.toFixed(2)+"%" ],false))
 
         }else{
             
@@ -316,51 +318,49 @@
         });           
 
         const myPromise = fetch(myRequest)
-
         myPromise.then((response)=>{
 
             response.text().then((text)=>{
 
                 const body = document.createElement('div');
-                body.innerHTML = text;       
+                body.innerHTML = text;
+                const criptos = body.querySelectorAll('.SxcTic');
+                main.innerHTML = '';
+                const table = document.createElement('table');
+                table.className = "myTable";
+                table.innerHTML="<tr><th></th><th>Criptomoeda</th><th>USD</th><th>+/-</th><th>%</th><th>Acum.</th><th>↑↓</th><th>Gap</th><th>Peso</th><th>Inv.</th></tr>"
+                const first = coins.length
 
-                const criptos = body.querySelectorAll('.SxcTic');             
+                for(let i=0; i<criptos.length; i++){
+                    const name = criptos[i].querySelector('.ZvmM7').innerText;
+                    const val = criptos[i].querySelector('.YMlKec').innerText;
+                    const indice = criptos[i].querySelector('.P2Luy').innerText.substring(1,criptos[i].querySelector('.P2Luy').innerText.length);
+                    const perc = criptos[i].querySelector('.JwB6zf').innerText.substring(0,criptos[i].querySelector('.JwB6zf').innerText.length-1);
+                    const sig = criptos[i].querySelector('.P2Luy').innerText[0];
+                    let acum = 0;
+
+                    if(!first){
+                        coins.push(new Coin(i, name,val,indice,perc, sig))
+                    }else{                            
+                        coins[i].refresh(val, indice, perc)                            
+                    }
+
+                    let mark = false
+                    if(data.index == i){
+                        mark = true
+                    }
+                    table.appendChild(addLine([i,name,val,sig+"U$"+indice,sig+perc+"%",coins[i].acum.toFixed(2)+"%",coins[i].tend + coins[i].tend_ciclo, coins[i].tend_gap.toFixed(3)+"%" , coins[i].weigth, coins[i].invest.toFixed(6) ],mark));
+                }
+
+                main.appendChild(table)                
+
                 if(criptos.length >0){
                     if(data.start){
                         trade();
-                    }
-                    main.innerHTML = '';
-                    const table = document.createElement('table');
-                    table.className = "myTable";
-                    table.innerHTML="<tr><th></th><th>Criptomoeda</th><th>USD</th><th>+/-</th><th>%</th><th>Acum.</th><th>↑↓</th><th>Gap</th><th>Peso</th><th>Inv.</th></tr>"
-
-                    const first = coins.length
-
-                    for(let i=0; i<criptos.length; i++){                        
-                        const name = criptos[i].querySelector('.ZvmM7').innerText;
-                        const val = criptos[i].querySelector('.YMlKec').innerText;
-                        const indice = criptos[i].querySelector('.P2Luy').innerText.substring(1,criptos[i].querySelector('.P2Luy').innerText.length);
-                        const perc = criptos[i].querySelector('.JwB6zf').innerText.substring(0,criptos[i].querySelector('.JwB6zf').innerText.length-1);
-                        const sig = criptos[i].querySelector('.P2Luy').innerText[0];
-                        let acum = 0;
-
-                        if(!first){
-                            coins.push(new Coin(i, name,val,indice,perc, sig))
-                        }else{                            
-                            coins[i].refresh(val, indice, perc)                            
-                        }
-
-                        let mark = false
-                        if(data.index == i){
-                            mark = true
-                        }
-
-                        table.appendChild(addLine([i,name,val,sig+"U$"+indice,sig+perc+"%",coins[i].acum.toFixed(2)+"%",coins[i].tend + coins[i].tend_ciclo, coins[i].tend_gap.toFixed(3)+"%" , coins[i].weigth, coins[i].invest.toFixed(6) ],mark));
-                    }
-
-                    main.appendChild(table)
-                    
-                    addCiclo()
+                    }                    
+                
+                data.ciclo ++
+                lblCiclo.innerText = "Ciclo:"+data.ciclo;
                     
                 }else{
                     query()
@@ -397,11 +397,6 @@
     }
 
 
-    function addCiclo(){
-        data.ciclo ++
-        lblCiclo.innerText = "Ciclo:"+data.ciclo;
-
-    }
 
 </script>
 </html>
