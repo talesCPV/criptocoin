@@ -91,7 +91,7 @@
         </div>
 
         <div style="display: flex; grid-area: invest;">
-            <p id="lblInvest">Investimento:</p> <input type="text" value="0" id="edtInvest">
+            <p id="lblInvest">Investimento:</p> <input type="text" value="1000" id="edtInvest">
         </div>
                 
         <button id="btnStart" style="grid-area: btnStart;">Start</button>
@@ -197,20 +197,32 @@
     const coins = [];
     
     btnStart.addEventListener('click',()=>{
-        edtInvest.disabled = true;
-        data.mont_inicial = parseFloat(edtInvest.value);
-        data.montante = data.mont_inicial;
-        data.start = true;
-        data.ciclo = 0;
-        for(let i=0; i<coins.length; i++){
-            coins.acum = 10;
+
+        if(data.start){
+            data.start = false;
+            edtInvest.disabled = false;
+            btnStart.innerText = "Start";
+            edtInvest.value =data.montante.toFixed(2);
+
+        }else{
+            data.start = true;
+            edtInvest.disabled = true;
+            btnStart.innerText = "Stop";
+            data.mont_inicial = parseFloat(edtInvest.value);
+            data.montante = data.mont_inicial;
+//            data.ciclo = 0;
+/*
+            for(let i=0; i<coins.length; i++){
+                coins.acum = 10;
+            }
+*/
+            const today = new Date();
+            const time = today.getHours().toString().padStart(2, '0') + ":" + today.getMinutes().toString().padStart(2, '0') + ":" + today.getSeconds().toString().padStart(2, '0');
+
+            query();
+            lblStart.innerText = "Início: "+ time
         }
 
-        const today = new Date();
-        const time = today.getHours().toString().padStart(2, '0') + ":" + today.getMinutes().toString().padStart(2, '0') + ":" + today.getSeconds().toString().padStart(2, '0');
-
-        query();
-        lblStart.innerText = "Início: "+ time
 
     })
 
@@ -231,7 +243,7 @@
         return parseFloat(out)
     }
 
-    function addLine(vals,mark){
+    function addLine(vals,mark = -1){
         const row = document.createElement('tr')
         for(let i=0; i<vals.length; i++){
             const td = document.createElement('td')
@@ -242,7 +254,7 @@
                 td.style = "background:rgb(114, 231, 129);"
             }
             row.appendChild(td)
-            if(mark){
+            if(mark == data.index){
                 row.style.backgroundColor = "rgb(100,100,100)"
                 row.style.color = "rgb(255,255,255)"                
             }
@@ -259,7 +271,6 @@
         newCoin.sort((a, b)=> {                                 
             return getFloat(a.weigth.toString()) > getFloat(b.weigth.toString()) ? -1 : getFloat(a.weigth.toString()) < getFloat(b.weigth.toString()) ? 1 : 0;
         })
-
 
         const today = new Date();
         const time = today.getHours().toString().padStart(2, '0') + ":" + today.getMinutes().toString().padStart(2, '0') + ":" + today.getSeconds().toString().padStart(2, '0');
@@ -343,13 +354,8 @@
                         coins.push(new Coin(i, name,val,indice,perc, sig))
                     }else{                            
                         coins[i].refresh(val, indice, perc)                            
-                    }
-
-                    let mark = false
-                    if(data.index == i){
-                        mark = true
-                    }
-                    table.appendChild(addLine([i,name,val,sig+"U$"+indice,sig+perc+"%",coins[i].acum.toFixed(2)+"%",coins[i].tend + coins[i].tend_ciclo, coins[i].tend_gap.toFixed(3)+"%" , coins[i].weigth, coins[i].invest.toFixed(6) ],mark));
+                    }         
+                    table.appendChild(addLine([i,name,val,sig+"U$"+indice,sig+perc+"%",coins[i].acum.toFixed(2)+"%",coins[i].tend + coins[i].tend_ciclo, coins[i].tend_gap.toFixed(3)+"%" , coins[i].weigth, coins[i].invest.toFixed(6) ],i));
                 }
 
                 main.appendChild(table)                
@@ -357,11 +363,10 @@
                 if(criptos.length >0){
                     if(data.start){
                         trade();
+                        data.ciclo ++
+                        lblCiclo.innerText = "Ciclo:"+data.ciclo;
                     }                    
                 
-                data.ciclo ++
-                lblCiclo.innerText = "Ciclo:"+data.ciclo;
-                    
                 }else{
                     query()
                 }
@@ -372,7 +377,7 @@
     }
 
     function clock(){
-        if(data.start){
+//        if(data.start){
             data.timer[2]++
             if(data.timer[2] >= 60){
                 data.timer[2] = 0
@@ -392,7 +397,7 @@
             const time = data.timer[0].toString().padStart(2, '0') + ":" + data.timer[1].toString().padStart(2, '0') + ":" + data.timer[2].toString().padStart(2, '0');
             lblTempo.innerText = "Tempo Decorrido: "+ time
             lblContagem.innerText = pbrCiclo.value
-        }
+//        }
 
     }
 
